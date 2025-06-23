@@ -123,20 +123,52 @@ class AgentFeeAggregator:
                 print(f"Warning: Could not extract date from {file_path}")
                 return {}
             
-            # Filter out invalid data
+            # Filter out invalid data (NaN values and zero/negative agent fees)
             df_clean = df.dropna(subset=['Run', 'Agent Fee'])
+            df_clean = df_clean[df_clean['Agent Fee'] > 0]
             
-            # Group by Run and sum Agent Fee
-            run_aggregation = df_clean.groupby('Run')['Agent Fee'].sum().to_dict()
+            if df_clean.empty:
+                print(f"Warning: No valid data found in {file_path}")
+                return {}
+            
+            # Check if Contract column exists for contract-level aggregation
+            if 'Contract' in df.columns:
+                # Group by Run and Contract, sum Agent Fee
+                run_contract_aggregation = df_clean.groupby(['Run', 'Contract'])['Agent Fee'].sum().to_dict()
+                
+                # Restructure the data
+                run_data = {}
+                for (run, contract), agent_fee in run_contract_aggregation.items():
+                    if run not in run_data:
+                        run_data[run] = {}
+                    run_data[run][contract] = agent_fee
+            else:
+                # Fallback: Group by Run only and assume all data is for 'STE' contract
+                run_aggregation = df_clean.groupby('Run')['Agent Fee'].sum().to_dict()
+                run_data = {}
+                for run, agent_fee in run_aggregation.items():
+                    run_data[run] = {'STE': agent_fee}
             
             return {
                 'file_path': file_path,
                 'date': file_date,
-                'run_data': run_aggregation
+                'run_data': run_data
             }
             
+        except FileNotFoundError:
+            print(f"Error: File not found: {file_path}")
+            return {}
+        except PermissionError:
+            print(f"Error: Permission denied accessing: {file_path}")
+            return {}
+        except ValueError as e:
+            if "Worksheet named 'All Data' not found" in str(e):
+                print(f"Error: 'All Data' worksheet not found in {file_path}")
+            else:
+                print(f"Error reading Excel file {file_path}: {e}")
+            return {}
         except Exception as e:
-            print(f"Error processing {file_path}: {e}")
+            print(f"Unexpected error processing {file_path}: {e}")
             return {}
     
     def aggregate_all_data(self) -> Dict:
@@ -144,7 +176,7 @@ class AgentFeeAggregator:
         Process all found STE_Report files and aggregate data.
         
         Returns:
-            Dictionary with aggregated data by run and date
+            Dictionary with aggregated data by run, contract, and date
         """
         aggregated = {}
         
@@ -157,14 +189,18 @@ class AgentFeeAggregator:
             date = file_data['date']
             run_data = file_data['run_data']
             
-            for run, agent_fee in run_data.items():
+            for run, contract_data in run_data.items():
                 if run not in aggregated:
                     aggregated[run] = {}
                     
-                if date not in aggregated[run]:
-                    aggregated[run][date] = 0
-                    
-                aggregated[run][date] += agent_fee
+                for contract, agent_fee in contract_data.items():
+                    if contract not in aggregated[run]:
+                        aggregated[run][contract] = {}
+                        
+                    if date not in aggregated[run][contract]:
+                        aggregated[run][contract][date] = 0
+                        
+                    aggregated[run][contract][date] += agent_fee
         
         self.aggregated_data = aggregated
         return aggregated
@@ -185,10 +221,15 @@ class AgentFeeAggregator:
         
         # Prepare data for Excel output
         all_dates = set()
+        all_contracts = set()
+        
         for run_data in self.aggregated_data.values():
-            all_dates.update(run_data.keys())
+            for contract_data in run_data.values():
+                all_dates.update(contract_data.keys())
+            all_contracts.update(run_data.keys())
         
         all_dates = sorted(all_dates)
+        all_contracts = sorted(all_contracts)
         
         # Create data structure similar to Audit.xlsx
         output_data = []
@@ -202,12 +243,15 @@ class AgentFeeAggregator:
             date_headers = ["Contract Name"] + [date.strftime("%Y-%m-%d") for date in all_dates]
             output_data.append(date_headers)
             
-            # Add contract data (assuming STE for now - this might need to be extracted differently)
-            ste_row = ["STE"]
-            for date in all_dates:
-                agent_fee = self.aggregated_data[run].get(date, 0)
-                ste_row.append(agent_fee)
-            output_data.append(ste_row)
+            # Add contract data for this run
+            run_contracts = self.aggregated_data[run]
+            for contract in all_contracts:
+                if contract in run_contracts:
+                    contract_row = [contract]
+                    for date in all_dates:
+                        agent_fee = run_contracts[contract].get(date, 0)
+                        contract_row.append(agent_fee if agent_fee > 0 else None)
+                    output_data.append(contract_row)
             
             # Add empty rows for separation
             output_data.append([None] * (len(all_dates) + 1))
@@ -300,8 +344,11 @@ def main():
     
     print(f"\nFound data for {len(aggregated_data)} runs")
     for run in sorted(aggregated_data.keys()):
-        dates_count = len(aggregated_data[run])
-        print(f"  Run {run}: {dates_count} dates")
+        contracts = list(aggregated_data[run].keys())
+        print(f"  Run {run}: {len(contracts)} contracts ({', '.join(contracts)})")
+        for contract in contracts:
+            dates_count = len(aggregated_data[run][contract])
+            print(f"    {contract}: {dates_count} dates")
     
     # Create output report
     print(f"\nCreating audit report: {args.output}")
