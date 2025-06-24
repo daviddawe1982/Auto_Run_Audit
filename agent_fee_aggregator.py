@@ -192,6 +192,8 @@ class AgentFeeAggregator:
                 continue
                 
             date = file_data['date']
+            # Convert datetime to string format for consistency with BEX data
+            date_key = date.strftime("%Y-%m-%d") if isinstance(date, datetime) else str(date)
             run_data = file_data['run_data']
             
             for run, contract_data in run_data.items():
@@ -202,10 +204,10 @@ class AgentFeeAggregator:
                     if contract not in aggregated[run]:
                         aggregated[run][contract] = {}
                         
-                    if date not in aggregated[run][contract]:
-                        aggregated[run][contract][date] = 0
+                    if date_key not in aggregated[run][contract]:
+                        aggregated[run][contract][date_key] = 0
                         
-                    aggregated[run][contract][date] += agent_fee
+                    aggregated[run][contract][date_key] += agent_fee
         
         self.aggregated_data = aggregated
         return aggregated
