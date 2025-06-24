@@ -718,9 +718,186 @@ class AgentFeeAggregator:
         for col_letter in ['A', 'H', 'I', 'J', 'K', 'L']:
             ws.column_dimensions[col_letter].width = 14
         
+        # Add bar graph and depot insights
+        self._add_bar_graph_and_depot_insights(ws, wb)
+        
         # Save the workbook
         wb.save(output_path)
         print(f"Enhanced audit report saved to {output_path}")
+
+    def _add_bar_graph_and_depot_insights(self, ws, wb):
+        """
+        Add bar graph showing revenue by run and depot-wide insights summary.
+        Graph starts from column N, insights are added below the graph.
+        """
+        from openpyxl.chart import BarChart, Reference
+        from openpyxl.styles import Font, Alignment, PatternFill
+        from openpyxl.utils import get_column_letter
+        
+        # Find all run sections and collect revenue data
+        run_revenue_data = []
+        run_cost_data = []
+        
+        # Scan the worksheet to find revenue formulas and run information
+        for row_idx in range(1, ws.max_row + 1):
+            cell_a = ws.cell(row=row_idx, column=1)
+            if cell_a.value and isinstance(cell_a.value, str) and "Run" in cell_a.value and "Audit" in cell_a.value:
+                # Extract run number
+                run_match = cell_a.value.replace("Run", "").replace("Audit", "").strip()
+                try:
+                    run_number = int(run_match)
+                except ValueError:
+                    continue
+                
+                # Look for the revenue formula in column L (column 12) within the next 20 rows
+                for search_row in range(row_idx, min(row_idx + 20, ws.max_row + 1)):
+                    revenue_cell = ws.cell(row=search_row, column=12)
+                    if revenue_cell.value and isinstance(revenue_cell.value, str) and revenue_cell.value.startswith("=I"):
+                        # Found revenue formula, collect data
+                        week_total_cell = ws.cell(row=search_row, column=9)  # Column I
+                        run_revenue_data.append({
+                            'run': run_number,
+                            'revenue_row': search_row,
+                            'week_total_row': search_row  # Same row for week total
+                        })
+                        break
+                
+                # Look for cost data (sum of costs from column K)
+                for search_row in range(row_idx, min(row_idx + 20, ws.max_row + 1)):
+                    cost_cell = ws.cell(row=search_row, column=12)
+                    if cost_cell.value and isinstance(cost_cell.value, str) and "SUM(K" in cost_cell.value:
+                        run_cost_data.append({
+                            'run': run_number,
+                            'cost_row': search_row
+                        })
+                        break
+        
+        # Start placing chart from column N (14)
+        chart_start_col = 14
+        chart_start_row = 2
+        
+        # Create data for the chart starting from column N
+        if run_revenue_data:
+            # Add headers for chart data
+            ws.cell(row=chart_start_row, column=chart_start_col, value="Run")
+            ws.cell(row=chart_start_row, column=chart_start_col + 1, value="Revenue")
+            
+            # Make headers bold
+            ws.cell(row=chart_start_row, column=chart_start_col).font = Font(bold=True)
+            ws.cell(row=chart_start_row, column=chart_start_col + 1).font = Font(bold=True)
+            
+            # Add run data
+            for i, run_data in enumerate(sorted(run_revenue_data, key=lambda x: x['run'])):
+                data_row = chart_start_row + 1 + i
+                ws.cell(row=data_row, column=chart_start_col, value=f"Run {run_data['run']}")
+                # Reference the week total (column I) for this run
+                ws.cell(row=data_row, column=chart_start_col + 1, value=f"=I{run_data['week_total_row']}")
+            
+            # Create bar chart
+            chart = BarChart()
+            chart.type = "col"
+            chart.style = 10
+            chart.title = "Revenue by Run"
+            chart.y_axis.title = 'Revenue ($)'
+            chart.x_axis.title = 'Run'
+            
+            # Define data ranges
+            data_rows = len(run_revenue_data)
+            data_range = Reference(ws, min_col=chart_start_col + 1, min_row=chart_start_row + 1, 
+                                 max_row=chart_start_row + data_rows, max_col=chart_start_col + 1)
+            categories = Reference(ws, min_col=chart_start_col, min_row=chart_start_row + 1,
+                                 max_row=chart_start_row + data_rows)
+            
+            chart.add_data(data_range, titles_from_data=False)
+            chart.set_categories(categories)
+            
+            # Position the chart
+            ws.add_chart(chart, f"{get_column_letter(chart_start_col)}{chart_start_row + data_rows + 3}")
+        
+        # Add depot-wide insights below the chart
+        insights_start_row = chart_start_row + len(run_revenue_data) + 20  # Leave space for chart
+        insights_col = chart_start_col
+        
+        # Section header
+        header_cell = ws.cell(row=insights_start_row, column=insights_col, value="Depot-Wide Insights")
+        header_cell.font = Font(bold=True, size=14)
+        header_cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_cell.font = Font(bold=True, size=14, color="FFFFFF")
+        
+        # Merge header across two columns
+        ws.merge_cells(f'{get_column_letter(insights_col)}{insights_start_row}:{get_column_letter(insights_col + 1)}{insights_start_row}')
+        
+        insights_start_row += 2
+        
+        # Total Depot Revenue
+        ws.cell(row=insights_start_row, column=insights_col, value="Total Depot Revenue:")
+        ws.cell(row=insights_start_row, column=insights_col).font = Font(bold=True)
+        
+        # Create formula to sum all week totals (column I) from all runs
+        if run_revenue_data:
+            revenue_formula_parts = []
+            for run_data in run_revenue_data:
+                revenue_formula_parts.append(f"I{run_data['week_total_row']}")
+            total_revenue_formula = f"=SUM({','.join(revenue_formula_parts)})"
+            ws.cell(row=insights_start_row, column=insights_col + 1, value=total_revenue_formula)
+            ws.cell(row=insights_start_row, column=insights_col + 1).number_format = '$#,##0.00'
+        
+        insights_start_row += 1
+        
+        # Total Depot Cost
+        ws.cell(row=insights_start_row, column=insights_col, value="Total Depot Cost:")
+        ws.cell(row=insights_start_row, column=insights_col).font = Font(bold=True)
+        
+        # Create formula to sum all costs from all runs
+        if run_cost_data:
+            cost_formula_parts = []
+            for run_data in run_cost_data:
+                # Extract the cost range from the existing formula in column L
+                cost_cell = ws.cell(row=run_data['cost_row'], column=12)
+                if cost_cell.value and isinstance(cost_cell.value, str) and "SUM(K" in cost_cell.value:
+                    # Extract the range from "=SUM(K4:K9) / 5" format
+                    start_idx = cost_cell.value.find("SUM(") + 4
+                    end_idx = cost_cell.value.find(")", start_idx)
+                    if end_idx > start_idx:
+                        range_part = cost_cell.value[start_idx:end_idx]
+                        if ":" in range_part:
+                            cost_formula_parts.append(range_part)
+            
+            if cost_formula_parts:
+                # Create formula that sums all the cost ranges
+                total_cost_formula = f"=SUM({','.join(cost_formula_parts)})"
+                ws.cell(row=insights_start_row, column=insights_col + 1, value=total_cost_formula)
+                ws.cell(row=insights_start_row, column=insights_col + 1).number_format = '$#,##0.00'
+        
+        insights_start_row += 1
+        
+        # Other Costs (manual input)
+        ws.cell(row=insights_start_row, column=insights_col, value="Other Costs:")
+        ws.cell(row=insights_start_row, column=insights_col).font = Font(bold=True)
+        other_costs_cell = ws.cell(row=insights_start_row, column=insights_col + 1, value=0)
+        other_costs_cell.number_format = '$#,##0.00'
+        other_costs_cell.fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")  # Light yellow for input
+        
+        insights_start_row += 1
+        
+        # Net Revenue (Total Revenue - Total Cost - Other Costs)
+        ws.cell(row=insights_start_row, column=insights_col, value="Net Revenue:")
+        ws.cell(row=insights_start_row, column=insights_col).font = Font(bold=True)
+        
+        # Reference the cells above for the calculation
+        revenue_row = insights_start_row - 3
+        cost_row = insights_start_row - 2
+        other_costs_row = insights_start_row - 1
+        
+        net_revenue_formula = f"={get_column_letter(insights_col + 1)}{revenue_row}-{get_column_letter(insights_col + 1)}{cost_row}-{get_column_letter(insights_col + 1)}{other_costs_row}"
+        net_revenue_cell = ws.cell(row=insights_start_row, column=insights_col + 1, value=net_revenue_formula)
+        net_revenue_cell.number_format = '$#,##0.00'
+        net_revenue_cell.font = Font(bold=True)
+        net_revenue_cell.fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")  # Light green
+        
+        # Set column widths for the new sections
+        ws.column_dimensions[get_column_letter(chart_start_col)].width = 20
+        ws.column_dimensions[get_column_letter(chart_start_col + 1)].width = 15
 
 
 def fetch_bex_contract_data(session: requests.Session, start_date: datetime, end_date: datetime) -> Dict:
