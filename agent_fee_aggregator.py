@@ -274,15 +274,17 @@ class AgentFeeAggregator:
             # Get cost data for this run
             cost_data = run_specific_costs.get(run, cost_data_template)
             
-            # Add Run header with date range 
+            # Add Run header (without date range)
+            ws.cell(row=current_row, column=1, value=f"Run {run} Audit")
+            ws.cell(row=current_row, column=1).font = Font(bold=True)
+            
+            # Add date range in the next column if dates exist
             if all_dates:
                 start_date = min(all_dates).strftime('%Y-%m-%d') if all_dates else ""
                 end_date = max(all_dates).strftime('%Y-%m-%d') if all_dates else ""
                 date_range = f"({start_date} to {end_date})" if start_date and end_date else ""
-                ws.cell(row=current_row, column=1, value=f"Run {run} Audit {date_range}")
-            else:
-                ws.cell(row=current_row, column=1, value=f"Run {run} Audit")
-            ws.cell(row=current_row, column=1).font = Font(bold=True)
+                ws.cell(row=current_row, column=2, value=date_range)
+            
             current_row += 2
             
             # Add headers row - use day names instead of dates
@@ -294,14 +296,14 @@ class AgentFeeAggregator:
             for i, day_name in enumerate(day_names, 2):
                 ws.cell(row=headers_row, column=i, value=day_name).font = Font(bold=True)
             
-            # Fixed position headers to match original
-            ws.cell(row=headers_row, column=8, value="Totals").font = Font(bold=True)
-            ws.cell(row=headers_row, column=10, value="Revenue Day Rate").font = Font(bold=True)
-            ws.cell(row=headers_row, column=13, value="Week Total").font = Font(bold=True)
-            ws.cell(row=headers_row, column=14, value="Cost").font = Font(bold=True)
-            ws.cell(row=headers_row, column=17, value="Cost Day Rate").font = Font(bold=True)
-            ws.cell(row=headers_row, column=19, value="Factor").font = Font(bold=True)
-            ws.cell(row=headers_row, column=20, value="Revenue").font = Font(bold=True)
+            # Updated column positions (removing empty columns I, K, L, P, R)
+            ws.cell(row=headers_row, column=7, value="Totals").font = Font(bold=True)      # was 8
+            ws.cell(row=headers_row, column=8, value="Revenue Day Rate").font = Font(bold=True)  # was 10
+            ws.cell(row=headers_row, column=9, value="Week Total").font = Font(bold=True)  # was 13
+            ws.cell(row=headers_row, column=10, value="Cost").font = Font(bold=True)       # was 14
+            ws.cell(row=headers_row, column=12, value="Cost Day Rate").font = Font(bold=True)   # was 17
+            ws.cell(row=headers_row, column=13, value="Factor").font = Font(bold=True)     # was 19
+            ws.cell(row=headers_row, column=14, value="Revenue").font = Font(bold=True)    # was 20
             
             current_row += 1
             contract_start_row = current_row
@@ -322,14 +324,14 @@ class AgentFeeAggregator:
                         if agent_fee > 0:
                             ws.cell(row=current_row, column=col_idx, value=agent_fee)
                     
-                    # Column H: Totals (SUM of daily values B to F)
-                    ws.cell(row=current_row, column=8, value=f"=SUM(B{current_row}:F{current_row})")
+                    # Column G: Totals (SUM of daily values B to F) - was column H
+                    ws.cell(row=current_row, column=7, value=f"=SUM(B{current_row}:F{current_row})")
                     
                     current_row += 1
             
             # Add empty rows for cost structure - we need exactly 6 more rows with SUM formulas
             for i in range(6):
-                ws.cell(row=current_row, column=8, value=f"=SUM(B{current_row}:F{current_row})")
+                ws.cell(row=current_row, column=7, value=f"=SUM(B{current_row}:F{current_row})")  # was column 8
                 current_row += 1
             
             # Now add the cost data and formulas
@@ -339,36 +341,36 @@ class AgentFeeAggregator:
                 cost_start_row = main_contract_row
                 cost_end_row = current_row - 1
                 
-                # Column J: Revenue Day Rate = Week Total / 5 (only for first contract)
-                ws.cell(row=main_contract_row, column=10, value=f"=M{main_contract_row}/5")
+                # Column H: Revenue Day Rate = Week Total / 5 (only for first contract) - was column J
+                ws.cell(row=main_contract_row, column=8, value=f"=I{main_contract_row}/5")
                 
-                # Column M: Week Total = SUM of all H values in this section
-                ws.cell(row=main_contract_row, column=13, value=f"=SUM(H{cost_start_row}:H{cost_end_row})")
+                # Column I: Week Total = SUM of all G values in this section - was column M
+                ws.cell(row=main_contract_row, column=9, value=f"=SUM(G{cost_start_row}:G{cost_end_row})")
                 
-                # Add cost breakdown in columns N and O
+                # Add cost breakdown in columns J and K - was columns N and O
                 for i, (cost_item, cost_value) in enumerate(cost_data):
                     cost_row = main_contract_row + i
-                    ws.cell(row=cost_row, column=14, value=cost_item)  # Column N
+                    ws.cell(row=cost_row, column=10, value=cost_item)  # Column J (was N)
                     
                     if cost_item == "Fuel Total":
                         # Fuel Total = Fuel Cost Per ltr * Fuel Liters
                         fuel_liters_row = main_contract_row + 3  # Fuel Liters row
                         fuel_cost_row = main_contract_row + 4    # Fuel Cost Per ltr row
-                        ws.cell(row=cost_row, column=15, value=f"=O{fuel_cost_row}*O{fuel_liters_row}")
+                        ws.cell(row=cost_row, column=11, value=f"=K{fuel_cost_row}*K{fuel_liters_row}")  # was O
                     elif isinstance(cost_value, str) and cost_value.startswith('='):
-                        ws.cell(row=cost_row, column=15, value=cost_value)  # Formula
+                        ws.cell(row=cost_row, column=11, value=cost_value)  # Column K (was O)
                     elif cost_value is not None:
-                        ws.cell(row=cost_row, column=15, value=cost_value)  # Value
+                        ws.cell(row=cost_row, column=11, value=cost_value)  # Column K (was O)
                 
-                # Column Q: Cost Day Rate = (sum of all costs) / 5
-                ws.cell(row=main_contract_row, column=17, value=f"=SUM(O{main_contract_row}:O{main_contract_row + 5}) / 5")
+                # Column L: Cost Day Rate = (sum of all costs) / 5 - was column Q
+                ws.cell(row=main_contract_row, column=12, value=f"=SUM(K{main_contract_row}:K{main_contract_row + 5}) / 5")
                 
-                # Column S: Factor = Revenue Day Rate / Cost Day Rate (place in appropriate row)
-                factor_row = main_contract_row + 1  # Second row like in original
-                ws.cell(row=factor_row, column=19, value=f"=J{main_contract_row}/Q{main_contract_row}")
+                # Column M: Factor = Revenue Day Rate / Cost Day Rate - was column S
+                # Place directly under Factor header (no gap)
+                ws.cell(row=main_contract_row, column=13, value=f"=H{main_contract_row}/L{main_contract_row}")
                 
-                # Column T: Revenue = Week Total - Total Costs
-                ws.cell(row=main_contract_row, column=20, value=f"=M{main_contract_row}-SUM(O{main_contract_row}:O{main_contract_row + 5})")
+                # Column N: Revenue = Week Total - Total Costs - was column T
+                ws.cell(row=main_contract_row, column=14, value=f"=I{main_contract_row}-SUM(K{main_contract_row}:K{main_contract_row + 5})")
             
             # Add separation rows
             current_row += 2
@@ -379,8 +381,40 @@ class AgentFeeAggregator:
         # Define styles
         header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
         light_fill = PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
-        border = Border(left=Side(style='thin'), right=Side(style='thin'), 
-                       top=Side(style='thin'), bottom=Side(style='thin'))
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), 
+                            top=Side(style='thin'), bottom=Side(style='thin'))
+        thick_border = Border(left=Side(style='thick'), right=Side(style='thick'), 
+                             top=Side(style='thick'), bottom=Side(style='thick'))
+        
+        # Track run sections for thick borders
+        run_sections = []
+        current_section = None
+        
+        # Identify run sections and apply borders to empty cells
+        for row_idx in range(1, ws.max_row + 1):
+            for col_idx in range(1, ws.max_column + 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell_value = cell.value
+                
+                # Check if this is a run header
+                if cell_value and isinstance(cell_value, str) and "Audit" in cell_value:
+                    if current_section:
+                        run_sections.append(current_section)
+                    current_section = {'start_row': row_idx, 'start_col': 1}
+                
+                # For daily columns (B-F), add borders even if empty
+                if col_idx >= 2 and col_idx <= 6:  # MON-FRI columns
+                    cell.border = thin_border
+                
+                # For cost value cells (Column K, next to cost items)
+                if col_idx == 11:  # Column K (cost values)
+                    cell.border = thin_border
+        
+        # Close the last section
+        if current_section:
+            current_section['end_row'] = ws.max_row
+            current_section['end_col'] = 14  # Column N is the rightmost data column
+            run_sections.append(current_section)
         
         # Apply styling to headers and cells
         for row in ws.iter_rows():
@@ -398,14 +432,64 @@ class AgentFeeAggregator:
                         cell.font = Font(bold=True)
                         cell.fill = light_fill
                     # Add borders to all cells with content
-                    cell.border = border
+                    if not cell.border or cell.border.left.style is None:
+                        cell.border = thin_border
                 elif cell.value and isinstance(cell.value, (int, float)):
                     # Number formatting for numeric values
                     cell.number_format = '0.00'
-                    cell.border = border
+                    if not cell.border or cell.border.left.style is None:
+                        cell.border = thin_border
                 elif cell.value and isinstance(cell.value, str) and cell.value.startswith('='):
                     # Formula cells
-                    cell.border = border
+                    if not cell.border or cell.border.left.style is None:
+                        cell.border = thin_border
+        
+        # Apply thick borders around each run section
+        for section in run_sections:
+            start_row = section['start_row']
+            end_row = section.get('end_row', ws.max_row)
+            start_col = section['start_col']
+            end_col = section.get('end_col', 14)
+            
+            # Find the actual end row by looking for the next run or end of data
+            actual_end_row = start_row
+            for check_row in range(start_row + 1, ws.max_row + 1):
+                cell_value = ws.cell(row=check_row, column=1).value
+                if cell_value and isinstance(cell_value, str) and "Audit" in cell_value:
+                    actual_end_row = check_row - 2  # Stop before the next run (with gap)
+                    break
+                # Check if there's any content in this row
+                has_content = any(ws.cell(row=check_row, column=col).value is not None 
+                                for col in range(1, end_col + 1))
+                if has_content:
+                    actual_end_row = check_row
+            
+            # Apply thick border to the perimeter of each section
+            for row_idx in range(start_row, actual_end_row + 1):
+                for col_idx in range(start_col, end_col + 1):
+                    cell = ws.cell(row=row_idx, column=col_idx)
+                    
+                    # Get existing border or create new one
+                    current_border = cell.border
+                    
+                    # Determine which sides need thick borders
+                    left_thick = (col_idx == start_col)
+                    right_thick = (col_idx == end_col)
+                    top_thick = (row_idx == start_row)
+                    bottom_thick = (row_idx == actual_end_row)
+                    
+                    # Use thick border on perimeter, thin elsewhere
+                    left_style = 'thick' if left_thick else (current_border.left.style or 'thin')
+                    right_style = 'thick' if right_thick else (current_border.right.style or 'thin')
+                    top_style = 'thick' if top_thick else (current_border.top.style or 'thin')
+                    bottom_style = 'thick' if bottom_thick else (current_border.bottom.style or 'thin')
+                    
+                    cell.border = Border(
+                        left=Side(style=left_style),
+                        right=Side(style=right_style),
+                        top=Side(style=top_style),
+                        bottom=Side(style=bottom_style)
+                    )
         
         # Auto-adjust column widths to fit content
         for column in ws.columns:
