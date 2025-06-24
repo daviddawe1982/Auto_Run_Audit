@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 import re
+import requests
+
 
 
 from typing import Dict, List, Tuple, Optional
@@ -797,7 +799,7 @@ def main():
             dates_count = len(aggregated_data[run][contract])
             print(f"    {contract}: {dates_count} dates")
     
-    
+    s = requests.Session()
     def TV_Login():
         s.post('https://portal.transvirtual.com/Public/Home/LoginCommit', data=payload, headers=headers)
     
@@ -814,9 +816,24 @@ def main():
     f"https://portal.transvirtual.com/Portal/Consignment/ManifestListGrid?_search=true&nd=1750731459270&rows=100&page=1&sidx=&sord=desc"
     f"&dateRange={date_range_str}&idSearchQueries=0&manifestType=Runsheet&createdBy.UserFirstName={run}"
     )
-
-    
-
+    print(manifest_url)
+    r = s.get(manifest_url)
+    response_data = r.json()  # Assuming r is the response object
+    row_count = len(response_data['rows'])
+    print(f"Number of rows in response: {row_count}")
+    for row in response_data['rows']:
+        id_number = row['id']
+        print(f"ID: {id_number}")
+        manifest_date = row['cell'][2] 
+        print(f"Manifest Date: {manifest_date}")
+        url = (
+        f"https://portal.transvirtual.com/Portal/Consignment/ManifestDetailGrid?_search=false"
+        f"&nd=&rows=500&page=1&sidx=&sord=desc&idManifest={id_number}&tbleName=ManifestRunsheetDetail"
+        )
+        res = s.get(url)
+        res_data = res.json()
+        print(res_data['userdata']['ConsignmentCustomerBaseTotal'])
+        
     # Create output report
     print(f"\nCreating audit report: {args.output}")
     aggregator.create_audit_report(args.output)
