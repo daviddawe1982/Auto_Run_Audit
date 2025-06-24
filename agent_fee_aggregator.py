@@ -274,36 +274,68 @@ class AgentFeeAggregator:
             # Get cost data for this run
             cost_data = run_specific_costs.get(run, cost_data_template)
             
-            # Add Run header (without date range)
+            # Add Run header in A1
             ws.cell(row=current_row, column=1, value=f"Run {run} Audit")
             ws.cell(row=current_row, column=1).font = Font(bold=True)
             
-            # Add date range in the next column if dates exist
+            current_row += 1
+            
+            # Add date range in A2 if dates exist
             if all_dates:
                 start_date = min(all_dates).strftime('%Y-%m-%d') if all_dates else ""
                 end_date = max(all_dates).strftime('%Y-%m-%d') if all_dates else ""
                 date_range = f"({start_date} to {end_date})" if start_date and end_date else ""
-                ws.cell(row=current_row, column=2, value=date_range)
+                date_cell = ws.cell(row=current_row, column=1, value=date_range)
+                date_cell.alignment = Alignment(horizontal='center', vertical='center')
+                
+                # Merge B1 and B2 and center them
+                ws.merge_cells(f'B{current_row-1}:B{current_row}')
+                merged_cell = ws.cell(row=current_row-1, column=2)
+                merged_cell.alignment = Alignment(horizontal='center', vertical='center')
             
-            current_row += 2
+            current_row += 1
             
             # Add headers row - use day names instead of dates
             headers_row = current_row
-            ws.cell(row=headers_row, column=1, value="Contract Name").font = Font(bold=True)
+            
+            # Set row height to 32 (convert to points: 32 * 0.75 = 24 points)
+            ws.row_dimensions[headers_row].height = 32
+            
+            # Create alignment for headers (center horizontal and vertical, with text wrap)
+            header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            
+            # Add headers with formatting
+            header_cell = ws.cell(row=headers_row, column=1, value="Contract Name")
+            header_cell.font = Font(bold=True)
+            header_cell.alignment = header_alignment
             
             # Day name columns (B to F) - MON, TUE, WED, THUR, FRI
             day_names = ["MON", "TUE", "WED", "THUR", "FRI"]
             for i, day_name in enumerate(day_names, 2):
-                ws.cell(row=headers_row, column=i, value=day_name).font = Font(bold=True)
+                header_cell = ws.cell(row=headers_row, column=i, value=day_name)
+                header_cell.font = Font(bold=True)
+                header_cell.alignment = header_alignment
             
             # Updated column positions (removing empty columns I, K, L, P, R)
-            ws.cell(row=headers_row, column=7, value="Totals").font = Font(bold=True)      # was 8
-            ws.cell(row=headers_row, column=8, value="Revenue Day Rate").font = Font(bold=True)  # was 10
-            ws.cell(row=headers_row, column=9, value="Week Total").font = Font(bold=True)  # was 13
-            ws.cell(row=headers_row, column=10, value="Cost").font = Font(bold=True)       # was 14
-            ws.cell(row=headers_row, column=12, value="Cost Day Rate").font = Font(bold=True)   # was 17
-            ws.cell(row=headers_row, column=13, value="Factor").font = Font(bold=True)     # was 19
-            ws.cell(row=headers_row, column=14, value="Revenue").font = Font(bold=True)    # was 20
+            header_cell = ws.cell(row=headers_row, column=7, value="Totals")
+            header_cell.font = Font(bold=True)
+            header_cell.alignment = header_alignment
+            
+            header_cell = ws.cell(row=headers_row, column=8, value="Revenue Day Rate")
+            header_cell.font = Font(bold=True)
+            header_cell.alignment = header_alignment
+            
+            header_cell = ws.cell(row=headers_row, column=9, value="Week Total")
+            header_cell.font = Font(bold=True)
+            header_cell.alignment = header_alignment
+            
+            header_cell = ws.cell(row=headers_row, column=10, value="Cost")
+            header_cell.font = Font(bold=True)
+            header_cell.alignment = header_alignment
+            
+            header_cell = ws.cell(row=headers_row, column=12, value="Cost Day Rate")
+            header_cell.font = Font(bold=True)
+            header_cell.alignment = header_alignment
             
             current_row += 1
             contract_start_row = current_row
@@ -365,12 +397,21 @@ class AgentFeeAggregator:
                 # Column L: Cost Day Rate = (sum of all costs) / 5 - was column Q
                 ws.cell(row=main_contract_row, column=12, value=f"=SUM(K{main_contract_row}:K{main_contract_row + 5}) / 5")
                 
-                # Column M: Factor = Revenue Day Rate / Cost Day Rate - was column S
-                # Place directly under Factor header (no gap)
-                ws.cell(row=main_contract_row, column=13, value=f"=H{main_contract_row}/L{main_contract_row}")
+                # Add Factor header and formula in column L, positioned after cost items
+                factor_row = main_contract_row + 1  # Skip one row after first cost item
+                factor_header_cell = ws.cell(row=factor_row, column=12, value="Factor")
+                factor_header_cell.font = Font(bold=True)
+                factor_header_cell.alignment = Alignment(horizontal='center', vertical='center')
                 
-                # Column N: Revenue = Week Total - Total Costs - was column T
-                ws.cell(row=main_contract_row, column=14, value=f"=I{main_contract_row}-SUM(K{main_contract_row}:K{main_contract_row + 5})")
+                factor_formula_cell = ws.cell(row=factor_row + 1, column=12, value=f"=H{main_contract_row}/L{main_contract_row}")
+                
+                # Add Revenue header and formula in column L, positioned after Factor
+                revenue_row = main_contract_row + 3  # Two rows after Factor
+                revenue_header_cell = ws.cell(row=revenue_row, column=12, value="Revenue")
+                revenue_header_cell.font = Font(bold=True)
+                revenue_header_cell.alignment = Alignment(horizontal='center', vertical='center')
+                
+                revenue_formula_cell = ws.cell(row=revenue_row + 1, column=12, value=f"=I{main_contract_row}-SUM(K{main_contract_row}:K{main_contract_row + 5})")
             
             # Add separation rows
             current_row += 2
@@ -420,17 +461,21 @@ class AgentFeeAggregator:
         for row in ws.iter_rows():
             for cell in row:
                 if cell.value and isinstance(cell.value, str):
-                    # Bold formatting and background for headers and audit titles
+                    # Bold formatting and background for main headers and audit titles
                     if ("Audit" in str(cell.value) or 
                         cell.value in ["Contract Name", "MON", "TUE", "WED", "THUR", "FRI", 
                                       "Totals", "Revenue Day Rate", "Week Total", 
-                                      "Cost", "Cost Day Rate", "Factor", "Revenue"]):
+                                      "Cost", "Cost Day Rate"]):
                         cell.font = Font(bold=True, color="FFFFFF")
                         cell.fill = header_fill
                     elif cell.value in ["Wage", "Super", "Running Costs", "Fuel Liters", 
                                        "Fuel Cost Per ltr", "Fuel Total"]:
                         cell.font = Font(bold=True)
                         cell.fill = light_fill
+                    elif cell.value in ["Factor", "Revenue"]:
+                        # Factor and Revenue headers have specific formatting since they're now under Cost Day Rate
+                        # They already have bold formatting applied when created
+                        pass
                     # Add borders to all cells with content
                     if not cell.border or cell.border.left.style is None:
                         cell.border = thin_border
@@ -491,23 +536,14 @@ class AgentFeeAggregator:
                         bottom=Side(style=bottom_style)
                     )
         
-        # Auto-adjust column widths to fit content
-        for column in ws.columns:
-            max_length = 0
-            column_letter = get_column_letter(column[0].column)
-            
-            for cell in column:
-                try:
-                    if cell.value:
-                        cell_length = len(str(cell.value))
-                        if cell_length > max_length:
-                            max_length = cell_length
-                except:
-                    pass
-            
-            # Set column width with some padding
-            adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
-            ws.column_dimensions[column_letter].width = max(adjusted_width, 12)  # Minimum width of 12
+        # Set specific column widths as per requirements
+        # B,C,D,E,F,G should be 10 wide
+        for col_letter in ['B', 'C', 'D', 'E', 'F', 'G']:
+            ws.column_dimensions[col_letter].width = 10
+        
+        # A,H,I,J,K,L should be 14 wide  
+        for col_letter in ['A', 'H', 'I', 'J', 'K', 'L']:
+            ws.column_dimensions[col_letter].width = 14
         
         # Save the workbook
         wb.save(output_path)
