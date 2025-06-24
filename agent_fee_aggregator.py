@@ -451,30 +451,45 @@ class AgentFeeAggregator:
             start_col = section['start_col']
             end_col = section.get('end_col', 14)
             
+            # Find the actual end row by looking for the next run or end of data
+            actual_end_row = start_row
+            for check_row in range(start_row + 1, ws.max_row + 1):
+                cell_value = ws.cell(row=check_row, column=1).value
+                if cell_value and isinstance(cell_value, str) and "Audit" in cell_value:
+                    actual_end_row = check_row - 2  # Stop before the next run (with gap)
+                    break
+                # Check if there's any content in this row
+                has_content = any(ws.cell(row=check_row, column=col).value is not None 
+                                for col in range(1, end_col + 1))
+                if has_content:
+                    actual_end_row = check_row
+            
             # Apply thick border to the perimeter of each section
-            for row_idx in range(start_row, end_row + 1):
+            for row_idx in range(start_row, actual_end_row + 1):
                 for col_idx in range(start_col, end_col + 1):
                     cell = ws.cell(row=row_idx, column=col_idx)
+                    
+                    # Get existing border or create new one
+                    current_border = cell.border
                     
                     # Determine which sides need thick borders
                     left_thick = (col_idx == start_col)
                     right_thick = (col_idx == end_col)
                     top_thick = (row_idx == start_row)
-                    bottom_thick = (row_idx == end_row)
+                    bottom_thick = (row_idx == actual_end_row)
                     
-                    # Create border with thick sides where appropriate
-                    if left_thick or right_thick or top_thick or bottom_thick:
-                        left_style = 'thick' if left_thick else 'thin'
-                        right_style = 'thick' if right_thick else 'thin'
-                        top_style = 'thick' if top_thick else 'thin'
-                        bottom_style = 'thick' if bottom_thick else 'thin'
-                        
-                        cell.border = Border(
-                            left=Side(style=left_style),
-                            right=Side(style=right_style),
-                            top=Side(style=top_style),
-                            bottom=Side(style=bottom_style)
-                        )
+                    # Use thick border on perimeter, thin elsewhere
+                    left_style = 'thick' if left_thick else (current_border.left.style or 'thin')
+                    right_style = 'thick' if right_thick else (current_border.right.style or 'thin')
+                    top_style = 'thick' if top_thick else (current_border.top.style or 'thin')
+                    bottom_style = 'thick' if bottom_thick else (current_border.bottom.style or 'thin')
+                    
+                    cell.border = Border(
+                        left=Side(style=left_style),
+                        right=Side(style=right_style),
+                        top=Side(style=top_style),
+                        bottom=Side(style=bottom_style)
+                    )
         
         # Auto-adjust column widths to fit content
         for column in ws.columns:
