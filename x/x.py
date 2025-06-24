@@ -719,6 +719,33 @@ def get_date_range() -> Tuple[Optional[datetime], Optional[datetime]]:
         print("Invalid choice. Processing all files.")
         return None, None
 
+# TransVirtual Login
+payload = {
+        'UserNameLogin': 'David@gee',
+        'PasswordLogin': 'khhed06!!!',
+        'RememberMe': 'false'
+    }
+headers = {
+        "Host": "portal.transvirtual.com",
+        "Connection": "keep-alive",
+        "Content-Length": "67",
+        "Origin": "https://portal.transvirtual.com",
+        "X-Requested-With": "XMLHttpRequest",
+        "Content-Type": "application/json",
+        "Accept": "*/*",
+        "Referer": "https://portal.transvirtual.com/Public/Home/Login?ReturnUrl=%2FPortal%2FConsignment%2FManifestListGrid%3F_search%3Dfalse%26nd%3D1650803811508%26rows%3D1000%26page%3D1%26sidx%3D%26sord%3Ddesc%26dateRange%3DMar%2B26%252C%2B2022%2B-%2BApr%2B24%252C%2B2022%26idSearchQueries%3D0%26manifestType%3DRunsheet",
+        "Accept-Encoding": "gzip,deflate,br",
+        "Accept-Language": "en-AU,en-GB;q=0.9,en-US;q=0.8,en;q=0.7",
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "pragma": "no-cache",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "Windows",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.199 Safari/537.36",
+    }
+
 
 def main():
     """Main function to run the Agent Fee Aggregator."""
@@ -770,6 +797,26 @@ def main():
             dates_count = len(aggregated_data[run][contract])
             print(f"    {contract}: {dates_count} dates")
     
+    
+    def TV_Login():
+        s.post('https://portal.transvirtual.com/Public/Home/LoginCommit', data=payload, headers=headers)
+    
+    print("Logging in to TV.")    
+    TV_Login()
+    
+    if start_date and end_date:
+        date_range_str = f"{start_date.strftime('%b %d, %Y')}%20-%20{end_date.strftime('%b %d, %Y')}"
+    else:
+        date_range_str = ""
+    run = "run18"
+    # Construct URL with dynamic date range
+    manifest_url = (
+    f"https://portal.transvirtual.com/Portal/Consignment/ManifestListGrid?_search=true&nd=1750731459270&rows=100&page=1&sidx=&sord=desc"
+    f"&dateRange={date_range_str}&idSearchQueries=0&manifestType=Runsheet&createdBy.UserFirstName={run}"
+    )
+
+    
+
     # Create output report
     print(f"\nCreating audit report: {args.output}")
     aggregator.create_audit_report(args.output)
