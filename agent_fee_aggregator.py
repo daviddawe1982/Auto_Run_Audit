@@ -145,7 +145,18 @@ class AgentFeeAggregator:
                 run_data = {}
                 for (run, contract), agent_fee in run_contract_aggregation.items():
                     # Convert run to string for consistency with BEX data
-                    run_str = str(run)
+                    # Handle float values by converting to int first to remove .0 suffix
+                    try:
+                        if isinstance(run, (int, float)) and not pd.isna(run):
+                            run_str = str(int(run))
+                        elif isinstance(run, str) and run.replace('.', '').replace('-', '').isdigit():
+                            # Handle string values that represent numbers with .0
+                            run_str = str(int(float(run)))
+                        else:
+                            run_str = str(run)
+                    except (ValueError, TypeError):
+                        run_str = str(run)
+                    
                     if run_str not in run_data:
                         run_data[run_str] = {}
                     run_data[run_str][contract] = agent_fee
@@ -155,7 +166,18 @@ class AgentFeeAggregator:
                 run_data = {}
                 for run, agent_fee in run_aggregation.items():
                     # Convert run to string for consistency with BEX data
-                    run_str = str(run)
+                    # Handle float values by converting to int first to remove .0 suffix
+                    try:
+                        if isinstance(run, (int, float)) and not pd.isna(run):
+                            run_str = str(int(run))
+                        elif isinstance(run, str) and run.replace('.', '').replace('-', '').isdigit():
+                            # Handle string values that represent numbers with .0
+                            run_str = str(int(float(run)))
+                        else:
+                            run_str = str(run)
+                    except (ValueError, TypeError):
+                        run_str = str(run)
+                    
                     run_data[run_str] = {'STE': agent_fee}
             
             return {
