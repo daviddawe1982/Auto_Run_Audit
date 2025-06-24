@@ -287,9 +287,9 @@ class AgentFeeAggregator:
             
             # Add date range in A2 if dates exist
             if all_dates:
-                start_date = min(all_dates).strftime('%Y-%m-%d') if all_dates else ""
-                end_date = max(all_dates).strftime('%Y-%m-%d') if all_dates else ""
-                date_range = f"({start_date} to {end_date})" if start_date and end_date else ""
+                start_date_str = min(all_dates) if all_dates else ""
+                end_date_str = max(all_dates) if all_dates else ""
+                date_range = f"({start_date_str} to {end_date_str})" if start_date_str and end_date_str else ""
                 date_cell = ws.cell(row=current_row, column=1, value=date_range)
                 date_cell.alignment = Alignment(horizontal='center', vertical='center')
                 
@@ -690,6 +690,92 @@ class AgentFeeAggregator:
         print(f"Enhanced audit report saved to {output_path}")
 
 
+def fetch_bex_contract_data(session: requests.Session, start_date: datetime, end_date: datetime) -> Dict:
+    """
+    Fetch BEX contract data from TransVirtual portal for runs 18-50.
+    
+    Args:
+        session: Authenticated requests session
+        start_date: Start date for data range
+        end_date: End date for data range
+        
+    Returns:
+        Dictionary with BEX contract data aggregated by run and date
+    """
+    bex_data = {}
+    date_range_str = f"{start_date.strftime('%b %d, %Y')}%20-%20{end_date.strftime('%b %d, %Y')}" if start_date and end_date else ""
+    
+    # Check runs 18 to 50
+    for run_num in range(18, 51):
+        run = f"run{run_num}"
+        print(f"Fetching data for {run}...")
+        
+        # Construct URL with dynamic date range
+        manifest_url = (
+            f"https://portal.transvirtual.com/Portal/Consignment/ManifestListGrid?_search=true&nd=1750731459270&rows=100&page=1&sidx=&sord=desc"
+            f"&dateRange={date_range_str}&idSearchQueries=0&manifestType=Runsheet&createdBy.UserFirstName={run}"
+        )
+        
+        try:
+            r = session.get(manifest_url)
+            response_data = r.json()
+            
+            if not response_data.get('rows'):
+                print(f"  No data found for {run}")
+                continue
+                
+            run_daily_totals = {}  # date -> total amount
+            row_count = len(response_data['rows'])
+            print(f"  Found {row_count} manifests for {run}")
+            
+            for row in response_data['rows']:
+                id_number = row['id']
+                manifest_date = row['cell'][2]  # Date in format DD/MM/YYYY
+                
+                # Convert date format from DD/MM/YYYY to YYYY-MM-DD for consistency
+                try:
+                    date_obj = datetime.strptime(manifest_date, "%d/%m/%Y")
+                    date_key = date_obj.strftime("%Y-%m-%d")
+                except ValueError:
+                    print(f"  Invalid date format: {manifest_date}")
+                    continue
+                
+                # Get detailed data for this manifest
+                detail_url = (
+                    f"https://portal.transvirtual.com/Portal/Consignment/ManifestDetailGrid?_search=false"
+                    f"&nd=&rows=500&page=1&sidx=&sord=desc&idManifest={id_number}&tbleName=ManifestRunsheetDetail"
+                )
+                
+                res = session.get(detail_url)
+                res_data = res.json()
+                
+                # Extract the ConsignmentCustomerBaseTotal
+                try:
+                    total = float(res_data['userdata']['ConsignmentCustomerBaseTotal'])
+                    
+                    # Aggregate by date
+                    if date_key not in run_daily_totals:
+                        run_daily_totals[date_key] = 0
+                    run_daily_totals[date_key] += total
+                    
+                except (KeyError, ValueError, TypeError) as e:
+                    print(f"  Error processing manifest {id_number}: {e}")
+                    continue
+            
+            # Only add run to bex_data if it has actual data
+            if run_daily_totals:
+                bex_data[run_num] = {'BEX': run_daily_totals}
+                print(f"  {run}: Found data for {len(run_daily_totals)} dates, total: {sum(run_daily_totals.values()):.2f}")
+            else:
+                print(f"  {run}: No valid data found")
+                
+        except Exception as e:
+            print(f"  Error fetching data for {run}: {e}")
+            continue
+    
+    return bex_data
+
+
 def get_date_range() -> Tuple[Optional[datetime], Optional[datetime]]:
     """
     Get date range from user input.
@@ -777,21 +863,23 @@ def main():
     if start_date or end_date:
         print(f"Date range: {start_date} to {end_date}")
     
-    # Find and process files
+    # Find and process STE files
     files = aggregator.find_ste_report_files(start_date, end_date)
     
-    if not files:
+    print(f"Found {len(files)} STE_Report files")
+    if files:
+        print(f"\nProcessing {len(files)} STE files...")
+        aggregated_data = aggregator.aggregate_all_data()
+    else:
         print("No STE_Report files found.")
-        return
+        aggregated_data = {}
     
-    print(f"\nProcessing {len(files)} files...")
-    aggregated_data = aggregator.aggregate_all_data()
-    
+    # Initialize empty aggregated_data if no STE files found
     if not aggregated_data:
-        print("No valid data found in the files.")
-        return
-    
-    print(f"\nFound data for {len(aggregated_data)} runs")
+        print("No valid STE data found in the files.")
+        aggregated_data = {}
+
+    print(f"\nFound STE data for {len(aggregated_data)} runs")
     for run in sorted(aggregated_data.keys()):
         contracts = list(aggregated_data[run].keys())
         print(f"  Run {run}: {len(contracts)} contracts ({', '.join(contracts)})")
@@ -799,40 +887,59 @@ def main():
             dates_count = len(aggregated_data[run][contract])
             print(f"    {contract}: {dates_count} dates")
     
+    # Fetch BEX contract data from TransVirtual
     s = requests.Session()
     def TV_Login():
-        s.post('https://portal.transvirtual.com/Public/Home/LoginCommit', data=payload, headers=headers)
+        try:
+            response = s.post('https://portal.transvirtual.com/Public/Home/LoginCommit', data=payload, headers=headers)
+            return response.status_code == 200
+        except Exception as e:
+            print(f"Login failed: {e}")
+            return False
     
-    print("Logging in to TV.")    
-    TV_Login()
-    
-    if start_date and end_date:
-        date_range_str = f"{start_date.strftime('%b %d, %Y')}%20-%20{end_date.strftime('%b %d, %Y')}"
+    print("\nLogging in to TV to fetch BEX contract data...")    
+    if not TV_Login():
+        print("Failed to login to TransVirtual. Skipping BEX data fetch.")
+        bex_data = {}
     else:
-        date_range_str = ""
-    run = "run18"
-    # Construct URL with dynamic date range
-    manifest_url = (
-    f"https://portal.transvirtual.com/Portal/Consignment/ManifestListGrid?_search=true&nd=1750731459270&rows=100&page=1&sidx=&sord=desc"
-    f"&dateRange={date_range_str}&idSearchQueries=0&manifestType=Runsheet&createdBy.UserFirstName={run}"
-    )
-    print(manifest_url)
-    r = s.get(manifest_url)
-    response_data = r.json()  # Assuming r is the response object
-    row_count = len(response_data['rows'])
-    print(f"Number of rows in response: {row_count}")
-    for row in response_data['rows']:
-        id_number = row['id']
-        print(f"ID: {id_number}")
-        manifest_date = row['cell'][2] 
-        print(f"Manifest Date: {manifest_date}")
-        url = (
-        f"https://portal.transvirtual.com/Portal/Consignment/ManifestDetailGrid?_search=false"
-        f"&nd=&rows=500&page=1&sidx=&sord=desc&idManifest={id_number}&tbleName=ManifestRunsheetDetail"
-        )
-        res = s.get(url)
-        res_data = res.json()
-        print(res_data['userdata']['ConsignmentCustomerBaseTotal'])
+        # Fetch BEX contract data for all runs
+        bex_data = fetch_bex_contract_data(s, start_date, end_date)
+    
+    # Integrate BEX data with existing aggregated_data
+    print(f"\nIntegrating BEX data...")
+    for run_num, run_contracts in bex_data.items():
+        run_key = str(run_num)  # Convert to string to match STE data format
+        
+        if run_key not in aggregated_data:
+            aggregated_data[run_key] = {}
+            
+        # Add BEX contract data
+        for contract, dates_data in run_contracts.items():
+            if contract not in aggregated_data[run_key]:
+                aggregated_data[run_key][contract] = {}
+                
+            for date, amount in dates_data.items():
+                if date not in aggregated_data[run_key][contract]:
+                    aggregated_data[run_key][contract][date] = 0
+                aggregated_data[run_key][contract][date] += amount
+    
+    # Update aggregator's data
+    aggregator.aggregated_data = aggregated_data
+    
+    # Check if we have any data at all (STE or BEX)
+    if not aggregated_data:
+        print("No valid data found (neither STE nor BEX data).")
+        return
+    
+    # Print final summary
+    print(f"\nFinal aggregated data summary:")
+    for run in sorted(aggregated_data.keys()):
+        contracts = list(aggregated_data[run].keys())
+        print(f"  Run {run}: {len(contracts)} contracts ({', '.join(contracts)})")
+        for contract in contracts:
+            dates_count = len(aggregated_data[run][contract])
+            total_amount = sum(aggregated_data[run][contract].values())
+            print(f"    {contract}: {dates_count} dates, total: {total_amount:.2f}")
         
     # Create output report
     print(f"\nCreating audit report: {args.output}")
