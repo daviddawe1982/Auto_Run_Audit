@@ -424,8 +424,8 @@ class AgentFeeAggregator:
         light_fill = PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
         thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), 
                             top=Side(style='thin'), bottom=Side(style='thin'))
-        thick_border = Border(left=Side(style='thick'), right=Side(style='thick'), 
-                             top=Side(style='thick'), bottom=Side(style='thick'))
+        medium_border = Border(left=Side(style='medium'), right=Side(style='medium'), 
+                             top=Side(style='medium'), bottom=Side(style='medium'))
         
         # Track run sections for thick borders
         run_sections = []
@@ -454,7 +454,7 @@ class AgentFeeAggregator:
         # Close the last section
         if current_section:
             current_section['end_row'] = ws.max_row
-            current_section['end_col'] = 14  # Column N is the rightmost data column
+            current_section['end_col'] = 12  # Column L is the rightmost data column (Cost Day Rate, Factor, Revenue)
             run_sections.append(current_section)
         
         # Apply styling to headers and cells
@@ -494,7 +494,7 @@ class AgentFeeAggregator:
             start_row = section['start_row']
             end_row = section.get('end_row', ws.max_row)
             start_col = section['start_col']
-            end_col = section.get('end_col', 14)
+            end_col = section.get('end_col', 12)
             
             # Find the actual end row by looking for the next run or end of data
             actual_end_row = start_row
@@ -523,11 +523,11 @@ class AgentFeeAggregator:
                     top_thick = (row_idx == start_row)
                     bottom_thick = (row_idx == actual_end_row)
                     
-                    # Use thick border on perimeter, thin elsewhere
-                    left_style = 'thick' if left_thick else (current_border.left.style or 'thin')
-                    right_style = 'thick' if right_thick else (current_border.right.style or 'thin')
-                    top_style = 'thick' if top_thick else (current_border.top.style or 'thin')
-                    bottom_style = 'thick' if bottom_thick else (current_border.bottom.style or 'thin')
+                    # Use medium border on perimeter, thin elsewhere
+                    left_style = 'medium' if left_thick else (current_border.left.style or 'thin')
+                    right_style = 'medium' if right_thick else (current_border.right.style or 'thin')
+                    top_style = 'medium' if top_thick else (current_border.top.style or 'thin')
+                    bottom_style = 'medium' if bottom_thick else (current_border.bottom.style or 'thin')
                     
                     cell.border = Border(
                         left=Side(style=left_style),
