@@ -833,11 +833,11 @@ class AgentFeeAggregator:
         ws.cell(row=insights_start_row, column=insights_col, value="Total Depot Revenue:")
         ws.cell(row=insights_start_row, column=insights_col).font = Font(bold=True)
         
-        # Create formula to sum all week totals (column I) from all runs
+        # Create formula to sum all week totals (column L) from all runs
         if run_revenue_data:
             revenue_formula_parts = []
             for run_data in run_revenue_data:
-                revenue_formula_parts.append(f"I{run_data['week_total_row']}")
+                revenue_formula_parts.append(f"L{run_data['week_total_row']}")
             total_revenue_formula = f"=SUM({','.join(revenue_formula_parts)})"
             ws.cell(row=insights_start_row, column=insights_col + 1, value=total_revenue_formula)
             ws.cell(row=insights_start_row, column=insights_col + 1).number_format = '$#,##0.00'
