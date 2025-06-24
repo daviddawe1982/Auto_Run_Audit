@@ -275,7 +275,7 @@ class AgentFeeAggregator:
         
         current_row = 1
         
-        for run in sorted(self.aggregated_data.keys()):
+        for run in sorted(self.aggregated_data.keys(), key=lambda x: int(x) if x.isdigit() else float('inf')):
             # Get cost data for this run
             cost_data = run_specific_costs.get(run, cost_data_template)
             
@@ -764,7 +764,7 @@ def fetch_bex_contract_data(session: requests.Session, start_date: datetime, end
             
             # Only add run to bex_data if it has actual data
             if run_daily_totals:
-                bex_data[run_num] = {'BEX': run_daily_totals}
+                bex_data[str(run_num)] = {'BEX': run_daily_totals}
                 print(f"  {run}: Found data for {len(run_daily_totals)} dates, total: {sum(run_daily_totals.values()):.2f}")
             else:
                 print(f"  {run}: No valid data found")
@@ -880,7 +880,7 @@ def main():
         aggregated_data = {}
 
     print(f"\nFound STE data for {len(aggregated_data)} runs")
-    for run in sorted(aggregated_data.keys()):
+    for run in sorted(aggregated_data.keys(), key=lambda x: int(x) if x.isdigit() else float('inf')):
         contracts = list(aggregated_data[run].keys())
         print(f"  Run {run}: {len(contracts)} contracts ({', '.join(contracts)})")
         for contract in contracts:
@@ -907,8 +907,8 @@ def main():
     
     # Integrate BEX data with existing aggregated_data
     print(f"\nIntegrating BEX data...")
-    for run_num, run_contracts in bex_data.items():
-        run_key = str(run_num)  # Convert to string to match STE data format
+    for run_key, run_contracts in bex_data.items():
+        # run_key is already a string from BEX data fetch
         
         if run_key not in aggregated_data:
             aggregated_data[run_key] = {}
@@ -933,7 +933,7 @@ def main():
     
     # Print final summary
     print(f"\nFinal aggregated data summary:")
-    for run in sorted(aggregated_data.keys()):
+    for run in sorted(aggregated_data.keys(), key=lambda x: int(x) if x.isdigit() else float('inf')):
         contracts = list(aggregated_data[run].keys())
         print(f"  Run {run}: {len(contracts)} contracts ({', '.join(contracts)})")
         for contract in contracts:
