@@ -754,7 +754,7 @@ class AgentFeeAggregator:
                     revenue_cell = ws.cell(row=search_row, column=12)
                     if revenue_cell.value and isinstance(revenue_cell.value, str) and revenue_cell.value.startswith("=I"):
                         # Found revenue formula, collect data
-                        week_total_cell = ws.cell(row=search_row, column=9)  # Column I
+                        week_total_cell = ws.cell(row=search_row, column=12)  # Column L
                         run_revenue_data.append({
                             'run': run_number,
                             'revenue_row': search_row,
