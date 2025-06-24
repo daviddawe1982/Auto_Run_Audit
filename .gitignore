@@ -60,6 +60,11 @@ temp/
 # Excel files (except example)
 *.xlsx
 !Audit.xlsx
+!example.xlsx
+
+# Test files
+test_*.py
+reproduce_issue.py
 
 # Logs
 *.log
