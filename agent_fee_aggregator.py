@@ -275,7 +275,7 @@ class AgentFeeAggregator:
         
         current_row = 1
         
-        for run in sorted(self.aggregated_data.keys(), key=lambda x: int(x) if x.isdigit() else float('inf')):
+        for run in sorted(self.aggregated_data.keys(), key=lambda x: int(str(x)) if str(x).isdigit() else float('inf')):
             # Get cost data for this run
             cost_data = run_specific_costs.get(run, cost_data_template)
             
@@ -880,7 +880,7 @@ def main():
         aggregated_data = {}
 
     print(f"\nFound STE data for {len(aggregated_data)} runs")
-    for run in sorted(aggregated_data.keys(), key=lambda x: int(x) if x.isdigit() else float('inf')):
+    for run in sorted(aggregated_data.keys(), key=lambda x: int(str(x)) if str(x).isdigit() else float('inf')):
         contracts = list(aggregated_data[run].keys())
         print(f"  Run {run}: {len(contracts)} contracts ({', '.join(contracts)})")
         for contract in contracts:
@@ -933,7 +933,7 @@ def main():
     
     # Print final summary
     print(f"\nFinal aggregated data summary:")
-    for run in sorted(aggregated_data.keys(), key=lambda x: int(x) if x.isdigit() else float('inf')):
+    for run in sorted(aggregated_data.keys(), key=lambda x: int(str(x)) if str(x).isdigit() else float('inf')):
         contracts = list(aggregated_data[run].keys())
         print(f"  Run {run}: {len(contracts)} contracts ({', '.join(contracts)})")
         for contract in contracts:
