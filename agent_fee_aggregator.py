@@ -692,7 +692,7 @@ class AgentFeeAggregator:
 
 def fetch_bex_contract_data(session: requests.Session, start_date: datetime, end_date: datetime) -> Dict:
     """
-    Fetch BEX contract data from TransVirtual portal for runs 18-50.
+    Fetch BEX contract data from TransVirtual portal for runs 1-50.
     
     Args:
         session: Authenticated requests session
@@ -705,8 +705,8 @@ def fetch_bex_contract_data(session: requests.Session, start_date: datetime, end
     bex_data = {}
     date_range_str = f"{start_date.strftime('%b %d, %Y')}%20-%20{end_date.strftime('%b %d, %Y')}" if start_date and end_date else ""
     
-    # Check runs 18 to 50
-    for run_num in range(18, 51):
+    # Check runs 1 to 50
+    for run_num in range(1, 51):
         run = f"run{run_num}"
         print(f"Fetching data for {run}...")
         
