@@ -144,15 +144,19 @@ class AgentFeeAggregator:
                 # Restructure the data
                 run_data = {}
                 for (run, contract), agent_fee in run_contract_aggregation.items():
-                    if run not in run_data:
-                        run_data[run] = {}
-                    run_data[run][contract] = agent_fee
+                    # Convert run to string for consistency with BEX data
+                    run_str = str(run)
+                    if run_str not in run_data:
+                        run_data[run_str] = {}
+                    run_data[run_str][contract] = agent_fee
             else:
                 # Fallback: Group by Run only and assume all data is for 'STE' contract
                 run_aggregation = df_clean.groupby('Run')['Agent Fee'].sum().to_dict()
                 run_data = {}
                 for run, agent_fee in run_aggregation.items():
-                    run_data[run] = {'STE': agent_fee}
+                    # Convert run to string for consistency with BEX data
+                    run_str = str(run)
+                    run_data[run_str] = {'STE': agent_fee}
             
             return {
                 'file_path': file_path,
@@ -709,7 +713,7 @@ def fetch_bex_contract_data(session: requests.Session, start_date: datetime, end
     
     # Check runs 1 to 50
     for run_num in range(1, 51):
-        run = f"run{run_num}"
+        run = f"run{run_num:02d}"
         print(f"Fetching data for {run}...")
         
         # Construct URL with dynamic date range
