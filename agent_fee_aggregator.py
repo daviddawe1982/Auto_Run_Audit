@@ -289,7 +289,7 @@ class AgentFeeAggregator:
                 date_cell.alignment = Alignment(horizontal='center', vertical='center')
                 
                 # Merge B1 and B2 and center them
-                ws.merge_cells(f'B{current_row-1}:B{current_row}')
+                ws.merge_cells(f'A{current_row}:B{current_row}')
                 merged_cell = ws.cell(row=current_row-1, column=2)
                 merged_cell.alignment = Alignment(horizontal='center', vertical='center')
             
