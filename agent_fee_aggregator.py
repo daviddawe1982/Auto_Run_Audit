@@ -207,7 +207,7 @@ class AgentFeeAggregator:
     
     def create_audit_report(self, output_path: str = "Agent_Fee_Audit.xlsx") -> None:
         """
-        Create an Excel report in the format of Audit.xlsx.
+        Create an Excel report in the format of Audit.xlsx with enhanced columns and formulas.
         
         Args:
             output_path: Path for the output Excel file
@@ -215,9 +215,11 @@ class AgentFeeAggregator:
         if not self.aggregated_data:
             print("No data to export. Run aggregate_all_data() first.")
             return
-            
-        # Create a new workbook
-        writer = pd.ExcelWriter(output_path, engine='openpyxl')
+        
+        # Import openpyxl for advanced Excel functionality
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment
+        from openpyxl.utils import get_column_letter
         
         # Prepare data for Excel output
         all_dates = set()
@@ -231,41 +233,155 @@ class AgentFeeAggregator:
         all_dates = sorted(all_dates)
         all_contracts = sorted(all_contracts)
         
-        # Create data structure similar to Audit.xlsx
-        output_data = []
+        # Create workbook and worksheet
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sheet1"
+        
+        # Define cost data structure per run (placeholder values as mentioned in issue)
+        cost_data_template = [
+            ('Wage', 1101.11),
+            ('Super', 110.91),
+            ('Running Costs', '=5*30 + 140'),  # Formula
+            ('Fuel Liters', 99.33),
+            ('Fuel Cost Per ltr', 1.577),
+            ('Fuel Total', None)  # Will be calculated with formula
+        ]
+        
+        # Different values for different runs (placeholder - can be customized)
+        run_specific_costs = {
+            20: [
+                ('Wage', 1101.11),
+                ('Super', 110.91),
+                ('Running Costs', '=5*30 + 140'),
+                ('Fuel Liters', 99.33),
+                ('Fuel Cost Per ltr', 1.577),
+                ('Fuel Total', None)
+            ],
+            32: [
+                ('Wage', 1069.89),
+                ('Super', 110.91),
+                ('Running Costs', '=5*30 + 140'),
+                ('Fuel Liters', 176.96),
+                ('Fuel Cost Per ltr', 1.55665),
+                ('Fuel Total', None)
+            ]
+        }
+        
+        current_row = 1
         
         for run in sorted(self.aggregated_data.keys()):
-            # Add Run header
-            output_data.append([f"Run {run} Audit"] + [None] * len(all_dates))
-            output_data.append([None] * (len(all_dates) + 1))
+            # Get cost data for this run
+            cost_data = run_specific_costs.get(run, cost_data_template)
             
-            # Add date headers
-            date_headers = ["Contract Name"] + [date.strftime("%Y-%m-%d") for date in all_dates]
-            output_data.append(date_headers)
+            # Add Run header
+            ws.cell(row=current_row, column=1, value=f"Run {run} Audit")
+            ws.cell(row=current_row, column=1).font = Font(bold=True)
+            current_row += 2
+            
+            # Add headers row - match the original structure exactly
+            headers_row = current_row
+            ws.cell(row=headers_row, column=1, value="Contract Name").font = Font(bold=True)
+            
+            # Date columns (B to F based on available dates)
+            for i, date in enumerate(all_dates[:5], 2):  # Limit to 5 dates like the original
+                ws.cell(row=headers_row, column=i, value=date.strftime("%Y-%m-%d")).font = Font(bold=True)
+            
+            # Fixed position headers to match original
+            ws.cell(row=headers_row, column=8, value="Totals").font = Font(bold=True)
+            ws.cell(row=headers_row, column=10, value="Revenue Day Rate").font = Font(bold=True)
+            ws.cell(row=headers_row, column=13, value="Week Total").font = Font(bold=True)
+            ws.cell(row=headers_row, column=14, value="Cost").font = Font(bold=True)
+            ws.cell(row=headers_row, column=17, value="Cost Day Rate").font = Font(bold=True)
+            ws.cell(row=headers_row, column=19, value="Factor").font = Font(bold=True)
+            ws.cell(row=headers_row, column=20, value="Revenue").font = Font(bold=True)
+            
+            current_row += 1
+            contract_start_row = current_row
             
             # Add contract data for this run
             run_contracts = self.aggregated_data[run]
-            for contract in all_contracts:
-                if contract in run_contracts:
-                    contract_row = [contract]
-                    for date in all_dates:
-                        agent_fee = run_contracts[contract].get(date, 0)
-                        contract_row.append(agent_fee if agent_fee > 0 else None)
-                    output_data.append(contract_row)
+            contract_rows = []
             
-            # Add empty rows for separation
-            output_data.append([None] * (len(all_dates) + 1))
-            output_data.append([None] * (len(all_dates) + 1))
+            for contract in sorted(all_contracts):
+                if contract in run_contracts:
+                    contract_rows.append(current_row)
+                    # Contract name
+                    ws.cell(row=current_row, column=1, value=contract)
+                    
+                    # Agent fee data for each date (limit to 5 dates)
+                    for col_idx, date in enumerate(all_dates[:5], 2):
+                        agent_fee = run_contracts[contract].get(date, 0)
+                        if agent_fee > 0:
+                            ws.cell(row=current_row, column=col_idx, value=agent_fee)
+                    
+                    # Column H: Totals (SUM of daily values B to F)
+                    ws.cell(row=current_row, column=8, value=f"=SUM(B{current_row}:F{current_row})")
+                    
+                    current_row += 1
+            
+            # Add empty rows for cost structure - we need exactly 6 more rows with SUM formulas
+            for i in range(6):
+                ws.cell(row=current_row, column=8, value=f"=SUM(B{current_row}:F{current_row})")
+                current_row += 1
+            
+            # Now add the cost data and formulas
+            # The main contract row (first actual contract with data)
+            if contract_rows:
+                main_contract_row = contract_rows[0]
+                cost_start_row = main_contract_row
+                cost_end_row = current_row - 1
+                
+                # Column J: Revenue Day Rate = Week Total / 5 (only for first contract)
+                ws.cell(row=main_contract_row, column=10, value=f"=M{main_contract_row}/5")
+                
+                # Column M: Week Total = SUM of all H values in this section
+                ws.cell(row=main_contract_row, column=13, value=f"=SUM(H{cost_start_row}:H{cost_end_row})")
+                
+                # Add cost breakdown in columns N and O
+                for i, (cost_item, cost_value) in enumerate(cost_data):
+                    cost_row = main_contract_row + i
+                    ws.cell(row=cost_row, column=14, value=cost_item)  # Column N
+                    
+                    if cost_item == "Fuel Total":
+                        # Fuel Total = Fuel Cost Per ltr * Fuel Liters
+                        fuel_liters_row = main_contract_row + 3  # Fuel Liters row
+                        fuel_cost_row = main_contract_row + 4    # Fuel Cost Per ltr row
+                        ws.cell(row=cost_row, column=15, value=f"=O{fuel_cost_row}*O{fuel_liters_row}")
+                    elif isinstance(cost_value, str) and cost_value.startswith('='):
+                        ws.cell(row=cost_row, column=15, value=cost_value)  # Formula
+                    elif cost_value is not None:
+                        ws.cell(row=cost_row, column=15, value=cost_value)  # Value
+                
+                # Column Q: Cost Day Rate = (sum of all costs) / 5
+                ws.cell(row=main_contract_row, column=17, value=f"=SUM(O{main_contract_row}:O{main_contract_row + 5}) / 5")
+                
+                # Column S: Factor = Revenue Day Rate / Cost Day Rate (place in appropriate row)
+                factor_row = main_contract_row + 1  # Second row like in original
+                ws.cell(row=factor_row, column=19, value=f"=J{main_contract_row}/Q{main_contract_row}")
+                
+                # Column T: Revenue = Week Total - Total Costs
+                ws.cell(row=main_contract_row, column=20, value=f"=M{main_contract_row}-SUM(O{main_contract_row}:O{main_contract_row + 5})")
+            
+            # Add separation rows
+            current_row += 2
         
-        # Convert to DataFrame and save
-        max_cols = max(len(row) for row in output_data) if output_data else 1
-        padded_data = [row + [None] * (max_cols - len(row)) for row in output_data]
+        # Apply styling to match the professional appearance
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value and isinstance(cell.value, str):
+                    # Bold formatting for headers and audit titles
+                    if ("Audit" in str(cell.value) or 
+                        cell.value in ["Contract Name", "Totals", "Revenue Day Rate", "Week Total", 
+                                      "Cost", "Cost Day Rate", "Factor", "Revenue"]):
+                        cell.font = Font(bold=True)
+                elif cell.value and isinstance(cell.value, (int, float)):
+                    # Number formatting for numeric values
+                    cell.number_format = '0.00'
         
-        df_output = pd.DataFrame(padded_data)
-        df_output.to_excel(writer, sheet_name="Sheet1", index=False, header=False)
-        
-        writer.close()
-        print(f"Audit report saved to {output_path}")
+        # Save the workbook
+        wb.save(output_path)
+        print(f"Enhanced audit report saved to {output_path}")
 
 
 def get_date_range() -> Tuple[Optional[datetime], Optional[datetime]]:
