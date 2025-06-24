@@ -394,8 +394,13 @@ class AgentFeeAggregator:
                     
                     current_row += 1
             
-            # Add empty rows for cost structure - we need exactly 6 more rows with SUM formulas
-            for i in range(6):
+            # Add empty rows for cost structure - total should be 7 rows (contracts + empty rows)
+            # Calculate how many empty rows to add based on actual number of contracts
+            contracts_added = len(contract_rows)
+            target_total_rows = 7
+            empty_rows_needed = max(0, target_total_rows - contracts_added)
+            
+            for i in range(empty_rows_needed):
                 ws.cell(row=current_row, column=7, value=f"=SUM(B{current_row}:F{current_row})")  # was column 8
                 current_row += 1
             
