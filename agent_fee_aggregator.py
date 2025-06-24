@@ -238,32 +238,32 @@ class AgentFeeAggregator:
         ws = wb.active
         ws.title = "Sheet1"
         
-        # Define cost data structure per run (placeholder values as mentioned in issue)
+        # Define cost data structure per run (updated defaults per issue requirements)
         cost_data_template = [
-            ('Wage', 1101.11),
-            ('Super', 110.91),
-            ('Running Costs', '=5*30 + 140'),  # Formula
-            ('Fuel Liters', 99.33),
-            ('Fuel Cost Per ltr', 1.577),
-            ('Fuel Total', None)  # Will be calculated with formula
+            ('Wage', 0),           # Default to 0 - will be entered manually
+            ('Super', 0),          # Default to 0 - will be entered manually  
+            ('Running Costs', '=5*30 + 140'),  # Formula: 140 per week + 30 per day
+            ('Fuel Liters', 0),    # Default to 0 - will be entered manually
+            ('Fuel Cost Per ltr', 0),  # Default to 0 - will be entered manually
+            ('Fuel Total', None)   # Will be calculated with formula
         ]
         
-        # Different values for different runs (placeholder - can be customized)
+        # Different values for different runs (using new defaults per issue requirements)
         run_specific_costs = {
             20: [
-                ('Wage', 1101.11),
-                ('Super', 110.91),
-                ('Running Costs', '=5*30 + 140'),
-                ('Fuel Liters', 99.33),
-                ('Fuel Cost Per ltr', 1.577),
+                ('Wage', 0),              # Default to 0 - will be entered manually
+                ('Super', 0),             # Default to 0 - will be entered manually
+                ('Running Costs', '=5*30 + 140'),  # Formula: 140 per week + 30 per day
+                ('Fuel Liters', 0),       # Default to 0 - will be entered manually  
+                ('Fuel Cost Per ltr', 0), # Default to 0 - will be entered manually
                 ('Fuel Total', None)
             ],
             32: [
-                ('Wage', 1069.89),
-                ('Super', 110.91),
-                ('Running Costs', '=5*30 + 140'),
-                ('Fuel Liters', 176.96),
-                ('Fuel Cost Per ltr', 1.55665),
+                ('Wage', 0),              # Default to 0 - will be entered manually
+                ('Super', 0),             # Default to 0 - will be entered manually
+                ('Running Costs', '=5*30 + 140'),  # Formula: 140 per week + 30 per day
+                ('Fuel Liters', 0),       # Default to 0 - will be entered manually
+                ('Fuel Cost Per ltr', 0), # Default to 0 - will be entered manually
                 ('Fuel Total', None)
             ]
         }
@@ -274,18 +274,25 @@ class AgentFeeAggregator:
             # Get cost data for this run
             cost_data = run_specific_costs.get(run, cost_data_template)
             
-            # Add Run header
-            ws.cell(row=current_row, column=1, value=f"Run {run} Audit")
+            # Add Run header with date range 
+            if all_dates:
+                start_date = min(all_dates).strftime('%Y-%m-%d') if all_dates else ""
+                end_date = max(all_dates).strftime('%Y-%m-%d') if all_dates else ""
+                date_range = f"({start_date} to {end_date})" if start_date and end_date else ""
+                ws.cell(row=current_row, column=1, value=f"Run {run} Audit {date_range}")
+            else:
+                ws.cell(row=current_row, column=1, value=f"Run {run} Audit")
             ws.cell(row=current_row, column=1).font = Font(bold=True)
             current_row += 2
             
-            # Add headers row - match the original structure exactly
+            # Add headers row - use day names instead of dates
             headers_row = current_row
             ws.cell(row=headers_row, column=1, value="Contract Name").font = Font(bold=True)
             
-            # Date columns (B to F based on available dates)
-            for i, date in enumerate(all_dates[:5], 2):  # Limit to 5 dates like the original
-                ws.cell(row=headers_row, column=i, value=date.strftime("%Y-%m-%d")).font = Font(bold=True)
+            # Day name columns (B to F) - MON, TUE, WED, THUR, FRI
+            day_names = ["MON", "TUE", "WED", "THUR", "FRI"]
+            for i, day_name in enumerate(day_names, 2):
+                ws.cell(row=headers_row, column=i, value=day_name).font = Font(bold=True)
             
             # Fixed position headers to match original
             ws.cell(row=headers_row, column=8, value="Totals").font = Font(bold=True)
@@ -366,18 +373,57 @@ class AgentFeeAggregator:
             # Add separation rows
             current_row += 2
         
-        # Apply styling to match the professional appearance
+        # Apply enhanced styling and formatting
+        from openpyxl.styles import PatternFill, Border, Side
+        
+        # Define styles
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        light_fill = PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
+        border = Border(left=Side(style='thin'), right=Side(style='thin'), 
+                       top=Side(style='thin'), bottom=Side(style='thin'))
+        
+        # Apply styling to headers and cells
         for row in ws.iter_rows():
             for cell in row:
                 if cell.value and isinstance(cell.value, str):
-                    # Bold formatting for headers and audit titles
+                    # Bold formatting and background for headers and audit titles
                     if ("Audit" in str(cell.value) or 
-                        cell.value in ["Contract Name", "Totals", "Revenue Day Rate", "Week Total", 
+                        cell.value in ["Contract Name", "MON", "TUE", "WED", "THUR", "FRI", 
+                                      "Totals", "Revenue Day Rate", "Week Total", 
                                       "Cost", "Cost Day Rate", "Factor", "Revenue"]):
+                        cell.font = Font(bold=True, color="FFFFFF")
+                        cell.fill = header_fill
+                    elif cell.value in ["Wage", "Super", "Running Costs", "Fuel Liters", 
+                                       "Fuel Cost Per ltr", "Fuel Total"]:
                         cell.font = Font(bold=True)
+                        cell.fill = light_fill
+                    # Add borders to all cells with content
+                    cell.border = border
                 elif cell.value and isinstance(cell.value, (int, float)):
                     # Number formatting for numeric values
                     cell.number_format = '0.00'
+                    cell.border = border
+                elif cell.value and isinstance(cell.value, str) and cell.value.startswith('='):
+                    # Formula cells
+                    cell.border = border
+        
+        # Auto-adjust column widths to fit content
+        for column in ws.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+            
+            for cell in column:
+                try:
+                    if cell.value:
+                        cell_length = len(str(cell.value))
+                        if cell_length > max_length:
+                            max_length = cell_length
+                except:
+                    pass
+            
+            # Set column width with some padding
+            adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+            ws.column_dimensions[column_letter].width = max(adjusted_width, 12)  # Minimum width of 12
         
         # Save the workbook
         wb.save(output_path)
