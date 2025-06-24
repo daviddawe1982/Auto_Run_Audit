@@ -287,9 +287,9 @@ class AgentFeeAggregator:
             
             # Add date range in A2 if dates exist
             if all_dates:
-                start_date = min(all_dates).strftime('%Y-%m-%d') if all_dates else ""
-                end_date = max(all_dates).strftime('%Y-%m-%d') if all_dates else ""
-                date_range = f"({start_date} to {end_date})" if start_date and end_date else ""
+                start_date_str = min(all_dates) if all_dates else ""
+                end_date_str = max(all_dates) if all_dates else ""
+                date_range = f"({start_date_str} to {end_date_str})" if start_date_str and end_date_str else ""
                 date_cell = ws.cell(row=current_row, column=1, value=date_range)
                 date_cell.alignment = Alignment(horizontal='center', vertical='center')
                 
