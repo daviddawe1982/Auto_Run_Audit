@@ -427,11 +427,11 @@ class AgentFeeAggregator:
         medium_border = Border(left=Side(style='medium'), right=Side(style='medium'), 
                              top=Side(style='medium'), bottom=Side(style='medium'))
         
-        # Track run sections for thick borders
+        # Track run sections for border application
         run_sections = []
         current_section = None
         
-        # Identify run sections and apply borders to empty cells
+        # Identify run sections - don't apply any default borders yet
         for row_idx in range(1, ws.max_row + 1):
             for col_idx in range(1, ws.max_column + 1):
                 cell = ws.cell(row=row_idx, column=col_idx)
@@ -442,14 +442,6 @@ class AgentFeeAggregator:
                     if current_section:
                         run_sections.append(current_section)
                     current_section = {'start_row': row_idx, 'start_col': 1}
-                
-                # For daily columns (B-F), add borders even if empty
-                if col_idx >= 2 and col_idx <= 6:  # MON-FRI columns
-                    cell.border = thin_border
-                
-                # For cost value cells (Column K, next to cost items)
-                if col_idx == 11:  # Column K (cost values)
-                    cell.border = thin_border
         
         # Close the last section
         if current_section:
@@ -457,7 +449,7 @@ class AgentFeeAggregator:
             current_section['end_col'] = 12  # Column L is the rightmost data column (Cost Day Rate, Factor, Revenue)
             run_sections.append(current_section)
         
-        # Apply styling to headers and cells
+        # Apply styling to headers and cells - but NO automatic borders yet
         for row in ws.iter_rows():
             for cell in row:
                 if cell.value and isinstance(cell.value, str):
@@ -476,20 +468,11 @@ class AgentFeeAggregator:
                         # Factor and Revenue headers have specific formatting since they're now under Cost Day Rate
                         # They already have bold formatting applied when created
                         pass
-                    # Add borders to all cells with content
-                    if not cell.border or cell.border.left.style is None:
-                        cell.border = thin_border
                 elif cell.value and isinstance(cell.value, (int, float)):
                     # Number formatting for numeric values
                     cell.number_format = '0.00'
-                    if not cell.border or cell.border.left.style is None:
-                        cell.border = thin_border
-                elif cell.value and isinstance(cell.value, str) and cell.value.startswith('='):
-                    # Formula cells
-                    if not cell.border or cell.border.left.style is None:
-                        cell.border = thin_border
         
-        # Apply thick borders around each run section
+        # Apply borders exactly matching the example.xlsx pattern
         for section in run_sections:
             start_row = section['start_row']
             end_row = section.get('end_row', ws.max_row)
@@ -508,32 +491,184 @@ class AgentFeeAggregator:
                                 for col in range(1, end_col + 1))
                 if has_content:
                     actual_end_row = check_row
-            
-            # Apply thick border to the perimeter of each section
+
+            # Apply borders matching the exact example.xlsx pattern
             for row_idx in range(start_row, actual_end_row + 1):
                 for col_idx in range(start_col, end_col + 1):
                     cell = ws.cell(row=row_idx, column=col_idx)
                     
-                    # Get existing border or create new one
-                    current_border = cell.border
+                    # Determine relative position within the section
+                    rel_row = row_idx - start_row + 1  # 1-based relative row
+                    col_letter = chr(64 + col_idx)
                     
-                    # Determine which sides need thick borders
-                    left_thick = (col_idx == start_col)
-                    right_thick = (col_idx == end_col)
-                    top_thick = (row_idx == start_row)
-                    bottom_thick = (row_idx == actual_end_row)
+                    # Define the exact border pattern based on example.xlsx analysis
+                    # This maps (relative_row, column_letter) to border configuration
+                    border_map = {
+                        # Row 1 patterns
+                        (1, 'A'): ('medium', 'thin', 'medium', 'thin'),      # L:medium|R:thin|T:medium|B:thin
+                        (1, 'B'): ('thin', None, 'medium', None),            # L:thin|T:medium
+                        (1, 'C'): (None, None, 'medium', None),              # T:medium
+                        (1, 'D'): (None, None, 'medium', None),              # T:medium
+                        (1, 'E'): (None, None, 'medium', None),              # T:medium
+                        (1, 'F'): (None, None, 'medium', None),              # T:medium
+                        (1, 'G'): (None, None, 'medium', None),              # T:medium
+                        (1, 'H'): (None, None, 'medium', None),              # T:medium
+                        (1, 'I'): (None, None, 'medium', None),              # T:medium
+                        (1, 'J'): (None, None, 'medium', None),              # T:medium
+                        (1, 'K'): (None, None, 'medium', None),              # T:medium
+                        (1, 'L'): (None, 'medium', 'medium', None),          # R:medium|T:medium
+                        
+                        # Row 2 patterns
+                        (2, 'A'): ('medium', None, None, 'thin'),            # L:medium|B:thin
+                        (2, 'B'): (None, None, None, 'thin'),                # B:thin
+                        (2, 'C'): (None, None, None, 'thin'),                # B:thin
+                        (2, 'D'): (None, None, None, 'thin'),                # B:thin
+                        (2, 'E'): (None, None, None, 'thin'),                # B:thin
+                        (2, 'F'): (None, None, None, 'thin'),                # B:thin
+                        (2, 'G'): (None, None, None, 'thin'),                # B:thin
+                        (2, 'H'): (None, None, None, 'thin'),                # B:thin
+                        (2, 'I'): (None, None, None, 'thin'),                # B:thin
+                        (2, 'J'): (None, None, None, 'thin'),                # B:thin
+                        (2, 'K'): (None, None, None, None),                  # (no value in example)
+                        (2, 'L'): (None, 'medium', None, 'thin'),            # R:medium|B:thin
+                        
+                        # Row 3 patterns (headers)
+                        (3, 'A'): ('medium', 'thin', 'thin', 'thin'),        # L:medium|R:thin|T:thin|B:thin
+                        (3, 'B'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (3, 'C'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (3, 'D'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (3, 'E'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (3, 'F'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (3, 'G'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (3, 'H'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (3, 'I'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (3, 'J'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (3, 'K'): ('thin', 'thin', None, 'thin'),            # L:thin|R:thin|B:thin
+                        (3, 'L'): ('thin', 'medium', 'thin', 'thin'),        # L:thin|R:medium|T:thin|B:thin
+                        
+                        # Row 4 patterns (main data row)
+                        (4, 'A'): ('medium', 'thin', 'thin', 'thin'),        # L:medium|R:thin|T:thin|B:thin
+                        (4, 'B'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (4, 'C'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (4, 'D'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (4, 'E'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (4, 'F'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (4, 'G'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (4, 'H'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (4, 'I'): ('thin', None, 'thin', 'thin'),            # L:thin|T:thin|B:thin
+                        (4, 'J'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (4, 'K'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (4, 'L'): ('thin', 'medium', 'thin', 'thin'),        # L:thin|R:medium|T:thin|B:thin
+                        
+                        # Row 5 patterns
+                        (5, 'A'): ('medium', 'thin', 'thin', 'thin'),        # L:medium|R:thin|T:thin|B:thin
+                        (5, 'B'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (5, 'C'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (5, 'D'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (5, 'E'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (5, 'F'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (5, 'G'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (5, 'H'): ('thin', None, 'thin', None),              # L:thin|T:thin
+                        (5, 'I'): (None, None, None, None),                  # (no borders)
+                        (5, 'J'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (5, 'K'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (5, 'L'): ('thin', 'medium', 'thin', 'thin'),        # L:thin|R:medium|T:thin|B:thin
+                        
+                        # Row 6 patterns
+                        (6, 'A'): ('medium', 'thin', 'thin', 'thin'),        # L:medium|R:thin|T:thin|B:thin
+                        (6, 'B'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (6, 'C'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (6, 'D'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (6, 'E'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (6, 'F'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (6, 'G'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (6, 'H'): ('thin', None, None, None),                # L:thin
+                        (6, 'I'): (None, None, None, None),                  # (no borders)
+                        (6, 'J'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (6, 'K'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (6, 'L'): ('thin', 'medium', 'thin', None),          # L:thin|R:medium|T:thin
+                        
+                        # Row 7 patterns
+                        (7, 'A'): ('medium', 'thin', 'thin', 'thin'),        # L:medium|R:thin|T:thin|B:thin
+                        (7, 'B'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (7, 'C'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (7, 'D'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (7, 'E'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (7, 'F'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (7, 'G'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (7, 'H'): ('thin', None, None, None),                # L:thin
+                        (7, 'I'): (None, None, None, None),                  # (no borders)
+                        (7, 'J'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (7, 'K'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (7, 'L'): ('thin', 'medium', 'thin', 'thin'),        # L:thin|R:medium|T:thin|B:thin
+                        
+                        # Row 8 patterns
+                        (8, 'A'): ('medium', 'thin', 'thin', 'thin'),        # L:medium|R:thin|T:thin|B:thin
+                        (8, 'B'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (8, 'C'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (8, 'D'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (8, 'E'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (8, 'F'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (8, 'G'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (8, 'H'): ('thin', None, None, None),                # L:thin
+                        (8, 'I'): (None, None, None, None),                  # (no borders)
+                        (8, 'J'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (8, 'K'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (8, 'L'): ('thin', 'medium', 'thin', 'thin'),        # L:thin|R:medium|T:thin|B:thin
+                        
+                        # Row 9 patterns
+                        (9, 'A'): ('medium', 'thin', 'thin', 'thin'),        # L:medium|R:thin|T:thin|B:thin
+                        (9, 'B'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (9, 'C'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (9, 'D'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (9, 'E'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (9, 'F'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (9, 'G'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (9, 'H'): ('thin', None, None, None),                # L:thin
+                        (9, 'I'): (None, None, None, None),                  # (no borders)
+                        (9, 'J'): ('thin', 'thin', 'thin', 'thin'),          # L:thin|R:thin|T:thin|B:thin
+                        (9, 'K'): ('thin', 'thin', 'thin', None),            # L:thin|R:thin|T:thin
+                        (9, 'L'): ('thin', 'medium', None, None),            # L:thin|R:medium
+                        
+                        # Row 10 patterns
+                        (10, 'A'): ('medium', 'thin', 'thin', 'thin'),       # L:medium|R:thin|T:thin|B:thin
+                        (10, 'B'): ('thin', 'thin', 'thin', 'thin'),         # L:thin|R:thin|T:thin|B:thin
+                        (10, 'C'): ('thin', 'thin', 'thin', 'thin'),         # L:thin|R:thin|T:thin|B:thin
+                        (10, 'D'): ('thin', 'thin', 'thin', 'thin'),         # L:thin|R:thin|T:thin|B:thin
+                        (10, 'E'): ('thin', 'thin', 'thin', 'thin'),         # L:thin|R:thin|T:thin|B:thin
+                        (10, 'F'): ('thin', 'thin', 'thin', 'thin'),         # L:thin|R:thin|T:thin|B:thin
+                        (10, 'G'): ('thin', 'thin', 'thin', 'thin'),         # L:thin|R:thin|T:thin|B:thin
+                        (10, 'H'): ('thin', None, None, None),               # L:thin
+                        (10, 'I'): (None, None, None, None),                 # (no borders)
+                        (10, 'J'): (None, None, None, None),                 # (no borders)
+                        (10, 'K'): (None, None, 'thin', None),               # T:thin
+                        (10, 'L'): (None, 'medium', None, None),             # R:medium
+                        
+                        # Row 11 patterns (bottom border)
+                        (11, 'A'): ('medium', None, 'thin', 'medium'),       # L:medium|T:thin|B:medium
+                        (11, 'B'): (None, None, 'thin', 'medium'),           # T:thin|B:medium
+                        (11, 'C'): (None, None, 'thin', 'medium'),           # T:thin|B:medium
+                        (11, 'D'): (None, None, 'thin', 'medium'),           # T:thin|B:medium
+                        (11, 'E'): (None, None, 'thin', 'medium'),           # T:thin|B:medium
+                        (11, 'F'): (None, None, 'thin', 'medium'),           # T:thin|B:medium
+                        (11, 'G'): (None, None, 'thin', 'medium'),           # T:thin|B:medium
+                        (11, 'H'): (None, None, None, 'medium'),             # B:medium
+                        (11, 'I'): (None, None, None, 'medium'),             # B:medium
+                        (11, 'J'): (None, None, None, 'medium'),             # B:medium
+                        (11, 'K'): (None, None, None, 'medium'),             # B:medium
+                        (11, 'L'): (None, 'medium', None, 'medium'),         # R:medium|B:medium
+                    }
                     
-                    # Use medium border on perimeter, thin elsewhere
-                    left_style = 'medium' if left_thick else (current_border.left.style or 'thin')
-                    right_style = 'medium' if right_thick else (current_border.right.style or 'thin')
-                    top_style = 'medium' if top_thick else (current_border.top.style or 'thin')
-                    bottom_style = 'medium' if bottom_thick else (current_border.bottom.style or 'thin')
+                    # Get border configuration for this cell
+                    border_config = border_map.get((rel_row, col_letter), ('thin', 'thin', 'thin', 'thin'))
+                    left_style, right_style, top_style, bottom_style = border_config
                     
+                    # Apply the border
                     cell.border = Border(
-                        left=Side(style=left_style),
-                        right=Side(style=right_style),
-                        top=Side(style=top_style),
-                        bottom=Side(style=bottom_style)
+                        left=Side(style=left_style) if left_style else Side(),
+                        right=Side(style=right_style) if right_style else Side(),
+                        top=Side(style=top_style) if top_style else Side(),
+                        bottom=Side(style=bottom_style) if bottom_style else Side()
                     )
         
         # Set specific column widths as per requirements
