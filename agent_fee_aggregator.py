@@ -470,9 +470,9 @@ class AgentFeeAggregator:
                         cell.font = Font(bold=True)
                         cell.fill = light_fill
                     elif cell.value in ["Factor", "Revenue"]:
-                        # Factor and Revenue headers have specific formatting since they're now under Cost Day Rate
-                        # They already have bold formatting applied when created
-                        pass
+                        # Factor and Revenue headers should have the same blue background and white text as other headers
+                        cell.font = Font(bold=True, color="FFFFFF")
+                        cell.fill = header_fill
                 elif cell.value and isinstance(cell.value, (int, float)):
                     # Number formatting for numeric values
                     cell.number_format = '0.00'
