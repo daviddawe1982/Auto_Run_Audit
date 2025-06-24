@@ -432,8 +432,8 @@ class AgentFeeAggregator:
                     elif cost_value is not None:
                         ws.cell(row=cost_row, column=11, value=cost_value)  # Column K (was O)
                 
-                # Column L: Cost Day Rate = (sum of all costs) / 5 - was column Q
-                ws.cell(row=main_contract_row, column=12, value=f"=SUM(K{main_contract_row}:K{main_contract_row + 5}) / 5")
+                # Column L: Cost Day Rate = (sum of specific costs: Wage+Super+Running Costs+Fuel Total) / 5 - was column Q
+                ws.cell(row=main_contract_row, column=12, value=f"=SUM(K{main_contract_row}+K{main_contract_row + 1}+K{main_contract_row + 2}+K{main_contract_row + 5}) / 5")
                 
                 # Add Factor header and formula in column L, positioned after cost items
                 factor_row = main_contract_row + 1  # Skip one row after first cost item
@@ -449,7 +449,7 @@ class AgentFeeAggregator:
                 revenue_header_cell.font = Font(bold=True)
                 revenue_header_cell.alignment = Alignment(horizontal='center', vertical='center')
                 
-                revenue_formula_cell = ws.cell(row=revenue_row + 1, column=12, value=f"=I{main_contract_row}-SUM(K{main_contract_row}:K{main_contract_row + 5})")
+                revenue_formula_cell = ws.cell(row=revenue_row + 1, column=12, value=f"=I{main_contract_row}-SUM(K{main_contract_row}+K{main_contract_row + 1}+K{main_contract_row + 2}+K{main_contract_row + 5})")
             
             # Add separation rows
             current_row += 2
