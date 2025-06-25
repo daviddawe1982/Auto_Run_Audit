@@ -790,8 +790,8 @@ class AgentFeeAggregator:
             for i, run_data in enumerate(sorted(run_revenue_data, key=lambda x: x['run'])):
                 data_row = chart_start_row + 1 + i
                 ws.cell(row=data_row, column=chart_start_col, value=f"Run {run_data['run']}")
-                # Reference the week total (column I) for this run
-                ws.cell(row=data_row, column=chart_start_col + 1, value=f"=I{run_data['week_total_row']}")
+                # Reference the week total (column L) for this run
+                ws.cell(row=data_row, column=chart_start_col + 1, value=f"=L{run_data['week_total_row']}")
             
             # Create bar chart
             chart = BarChart()
